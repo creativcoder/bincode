@@ -7,6 +7,10 @@ use std::io::Error as IoError;
 use std::{error, fmt, result};
 use ::SizeLimit;
 use byteorder::{ByteOrder};
+use crc::crc32;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CRC32(u32);
 
 pub use super::de::{
     Deserializer,
@@ -155,6 +159,58 @@ pub fn serialize<T: ?Sized, S, E>(value: &T, size_limit: S) -> Result<Vec<u8>>
     Ok(writer)
 }
 
+/// foo
+pub fn serialize_into_crc<W: ?Sized, T: ?Sized, S, E>(writer: &mut W, value: &T, size_limit: S) -> Result<()>
+    where W: Write, T: serde::Serialize, S: SizeLimit, E: ByteOrder
+{
+    if let Some(limit) = size_limit.limit() {
+        try!(serialized_size_bounded(value, limit).ok_or(ErrorKind::SizeLimit));
+    }
+
+    let mut serializer = Serializer::<_, E>::new(writer);
+    serde::Serialize::serialize(value, &mut serializer)
+}
+
+/// foo
+pub fn serialize_crc<T: ?Sized, S, E>(value: &T, size_limit: S) -> Result<Vec<u8>>
+where T: serde::Serialize, S: SizeLimit, E: ByteOrder {
+    let (mut writer, value_len) = match size_limit.limit() {
+        Some(size_limit) => {
+            let actual_size = try!(serialized_size_bounded(value, size_limit).ok_or(ErrorKind::SizeLimit));
+            (Vec::<u8>::with_capacity(actual_size as usize), actual_size as u64)
+        }
+        None => {
+            let size = serialized_size(value) as usize;
+            (Vec::with_capacity(size), size as u64)
+        }
+    };
+
+
+    // Serialize Payload Length
+    // let mut len_vec = vec![];
+    // println!("Value Len {:?}",value_len );
+    // try!(serialize_into::<_, _, _, E>(&mut len_vec, &value_len, super::Infinite));
+
+
+    // Serialize Payload
+    let mut payload_vec = vec![];
+    try!(serialize_into::<_, _, _, E>(&mut payload_vec, value, super::Infinite));
+    println!("Payload Vec {:?}",payload_vec );
+
+    // Serialize the CRC
+    let mut crc_vec = vec![];
+    let crc = CRC32(crc32::checksum_ieee(&payload_vec));
+    println!("CRC {:?}", crc);
+    try!(serialize_into::<_, _, _, E>(&mut crc_vec, &crc, super::Infinite));
+
+
+    let concatenated: Vec<u8> = [/*&crc_vec[..],*/ /*&len_vec[..],*/ &payload_vec[..]].concat();
+
+    // println!("{:?}", concatenated);
+    Ok(concatenated)
+
+}
+
 
 struct CountSize {
     total: u64,
@@ -237,4 +293,18 @@ pub fn deserialize<'a, T, E: ByteOrder>(bytes: &'a [u8]) -> Result<T>
     let reader = ::de::read::SliceReader::new(bytes);
     let mut deserializer = Deserializer::<_, _, E>::new(reader, super::Infinite);
     serde::Deserialize::deserialize(&mut deserializer)
+}
+
+/// Deserialize one
+pub fn deserialize_crc<'a, T, E: ByteOrder>(bytes: &'a [u8]) -> Result<T>
+where T: serde::de::Deserialize<'a>, {
+    let reader = ::de::read::SliceReader::new(bytes);
+    let mut deserializer = Deserializer::<_, _, E>::new(reader, super::Infinite);
+
+    deserialize.deserialize_i8();
+
+    // deserialize u32
+    // deserialize the payloadlen
+    // run loop and deserialize the type till payloadlen
+    unimplemented!();
 }

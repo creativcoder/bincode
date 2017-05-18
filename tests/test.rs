@@ -17,6 +17,7 @@ use bincode::internal::{serialize, deserialize, deserialize_from};
 use bincode::serialize as serialize_little;
 use bincode::deserialize as deserialize_little;
 use bincode::deserialize_from as deserialize_from_little;
+use bincode::{serialize_crc, serialize_into_crc};
 
 fn the_same<V>(element: V)
     where V: serde::Serialize+serde::de::DeserializeOwned+PartialEq+Debug+'static
@@ -40,6 +41,25 @@ fn the_same<V>(element: V)
         assert_eq!(element, decoded_reader);
         assert_eq!(size, encoded.len() as u64);
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct Foo {
+    one: String,
+    two: String
+}
+
+#[test]
+fn test_bincode_crc_serialize() {
+
+    let f = Foo {one: "a".to_string(), two: "b".to_string() };
+
+    // let data = "abc".to_string();
+    // let mut v = Vec::new();
+    let v = serialize_crc::<_,_,byteorder::LittleEndian>(&f, Infinite);
+    println!("{:?}",v );
+
+    // let d = Deserializer::new(&mut some_reader, SizeLimit::new());
 }
 
 #[test]

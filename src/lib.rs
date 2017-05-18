@@ -39,6 +39,9 @@
 extern crate byteorder;
 extern crate num_traits;
 extern crate serde as serde_crate;
+extern crate crc;
+#[macro_use]
+extern crate serde_derive;
 
 mod ser;
 mod de;
@@ -51,7 +54,7 @@ pub mod read_types {
 
 use std::io::{Read, Write};
 
-pub use internal::{ErrorKind, Error, Result, serialized_size, serialized_size_bounded};
+pub use internal::{ErrorKind, Error, Result, serialized_size, serialized_size_bounded, serialize_crc, serialize_into_crc};
 
 /// A Deserializer that uses LittleEndian byteorder
 pub type Deserializer<W, S> = internal::Deserializer<W, S, byteorder::LittleEndian>;

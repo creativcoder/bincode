@@ -105,6 +105,14 @@ where R: BincodeRead<'de>, S: SizeLimit, E: ByteOrder {
         }
     }
 
+    // Not here
+    // pub fn deserialize_crc<V>(self, visitor: V) -> Result<V::Value>
+    // where V: serde::de::Visitor<'de>, {
+    //     let crc_byte: u32 = try!(serde::Deserialize::deserialize(self));
+    //     panic!("");
+        
+    // }
+
     impl_nums!(u16, deserialize_u16, visit_u16, read_u16);
     impl_nums!(u32, deserialize_u32, visit_u32, read_u32);
     impl_nums!(u64, deserialize_u64, visit_u64, read_u64);
