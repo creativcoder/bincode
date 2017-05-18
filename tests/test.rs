@@ -17,6 +17,7 @@ use bincode::internal::{serialize, deserialize, deserialize_from};
 use bincode::serialize as serialize_little;
 use bincode::deserialize as deserialize_little;
 use bincode::deserialize_from as deserialize_from_little;
+use bincode::deserialize_crc_from;
 use bincode::{serialize_crc, serialize_into_crc};
 
 fn the_same<V>(element: V)
@@ -43,7 +44,7 @@ fn the_same<V>(element: V)
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Foo {
     one: String,
     two: String
@@ -53,11 +54,13 @@ struct Foo {
 fn test_bincode_crc_serialize() {
 
     let f = Foo {one: "a".to_string(), two: "b".to_string() };
-
-    // let data = "abc".to_string();
-    // let mut v = Vec::new();
-    let v = serialize_crc::<_,_,byteorder::LittleEndian>(&f, Infinite);
+    use std::io::Cursor;
+    let mut v = serialize_crc::<_,_,byteorder::LittleEndian>(&f, Infinite).unwrap();
     println!("{:?}",v );
+
+    let a: Result<Foo> = deserialize_crc_from::<_, _, _>(&mut Cursor::new(v), Infinite);
+
+    println!("Deserialize {:?}", a, );
 
     // let d = Deserializer::new(&mut some_reader, SizeLimit::new());
 }

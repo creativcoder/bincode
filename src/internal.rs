@@ -55,7 +55,9 @@ pub enum ErrorKind {
     /// Bincode can not encode sequences of unknown length (like iterators).
     SequenceMustHaveLength,
     /// A custom error message from Serde.
-    Custom(String)
+    Custom(String),
+    /// The crc hash of the payload did not match
+    CRCMismatch
 }
 
 impl error::Error for ErrorKind {
@@ -66,6 +68,7 @@ impl error::Error for ErrorKind {
             ErrorKind::SequenceMustHaveLength => "bincode can't encode infinite sequences",
             ErrorKind::SizeLimit => "the size limit for decoding has been reached",
             ErrorKind::Custom(ref msg) => msg,
+            ErrorKind::CRCMismatch => "crc mismatch, data is probably corrupted"
 
         }
     }
@@ -77,6 +80,7 @@ impl error::Error for ErrorKind {
             ErrorKind::SequenceMustHaveLength => None,
             ErrorKind::SizeLimit => None,
             ErrorKind::Custom(_) => None,
+            ErrorKind::CRCMismatch => None
         }
     }
 }
@@ -102,6 +106,7 @@ impl fmt::Display for ErrorKind {
                 write!(fmt, "SizeLimit"),
             ErrorKind::Custom(ref s) =>
                 s.fmt(fmt),
+            ErrorKind::CRCMismatch => write!(fmt, "CRC Mismatch error")
         }
     }
 }
@@ -185,30 +190,14 @@ where T: serde::Serialize, S: SizeLimit, E: ByteOrder {
         }
     };
 
-
-    // Serialize Payload Length
-    // let mut len_vec = vec![];
-    // println!("Value Len {:?}",value_len );
-    // try!(serialize_into::<_, _, _, E>(&mut len_vec, &value_len, super::Infinite));
-
-
-    // Serialize Payload
     let mut payload_vec = vec![];
     try!(serialize_into::<_, _, _, E>(&mut payload_vec, value, super::Infinite));
-    println!("Payload Vec {:?}",payload_vec );
-
-    // Serialize the CRC
     let mut crc_vec = vec![];
     let crc = CRC32(crc32::checksum_ieee(&payload_vec));
-    println!("CRC {:?}", crc);
+    println!("During serial CRC {:?}", crc);
     try!(serialize_into::<_, _, _, E>(&mut crc_vec, &crc, super::Infinite));
-
-
-    let concatenated: Vec<u8> = [/*&crc_vec[..],*/ /*&len_vec[..],*/ &payload_vec[..]].concat();
-
-    // println!("{:?}", concatenated);
+    let concatenated: Vec<u8> = [&crc_vec[..], &payload_vec[..]].concat();
     Ok(concatenated)
-
 }
 
 
@@ -283,6 +272,21 @@ pub fn deserialize_from<R: ?Sized, T, S, E>(reader: &mut R, size_limit: S) -> Re
     serde::Deserialize::deserialize(&mut deserializer)
 }
 
+use byteorder::{LittleEndian, ReadBytesExt};
+use std::io::Cursor;
+use std::slice::SliceExt;
+
+/// de crc
+pub fn deserialize_crc_from<R: ?Sized, T, S, E>(reader: &mut R, size_limit: S) -> Result<T>
+    where R: Read, T: serde::de::DeserializeOwned, S: SizeLimit, E: ByteOrder
+{
+    let crc_byte = reader.read_u32::<E>().unwrap();
+    println!("CRC WHILE DESER {:?}", crc_byte);
+    let reader = ::de::read::IoReadReader::new(reader);
+    let mut deserializer = Deserializer::<_, S, E>::new(reader, size_limit);
+    serde::Deserialize::deserialize(&mut deserializer)
+}
+
 /// Deserializes a slice of bytes into an object.
 ///
 /// This method does not have a size-limit because if you already have the bytes
@@ -293,18 +297,4 @@ pub fn deserialize<'a, T, E: ByteOrder>(bytes: &'a [u8]) -> Result<T>
     let reader = ::de::read::SliceReader::new(bytes);
     let mut deserializer = Deserializer::<_, _, E>::new(reader, super::Infinite);
     serde::Deserialize::deserialize(&mut deserializer)
-}
-
-/// Deserialize one
-pub fn deserialize_crc<'a, T, E: ByteOrder>(bytes: &'a [u8]) -> Result<T>
-where T: serde::de::Deserialize<'a>, {
-    let reader = ::de::read::SliceReader::new(bytes);
-    let mut deserializer = Deserializer::<_, _, E>::new(reader, super::Infinite);
-
-    deserialize.deserialize_i8();
-
-    // deserialize u32
-    // deserialize the payloadlen
-    // run loop and deserialize the type till payloadlen
-    unimplemented!();
 }
