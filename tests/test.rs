@@ -12,12 +12,11 @@ use std::borrow::Cow;
 
 use bincode::{Infinite, Bounded};
 use bincode::{serialized_size, ErrorKind, Result};
-use bincode::internal::{serialize, deserialize, deserialize_from};
+use bincode::internal::{serialize, deserialize, deserialize_from, deserialize_crc_from};
 
 use bincode::serialize as serialize_little;
 use bincode::deserialize as deserialize_little;
 use bincode::deserialize_from as deserialize_from_little;
-use bincode::deserialize_crc_from;
 use bincode::{serialize_crc, serialize_into_crc};
 
 fn the_same<V>(element: V)
@@ -45,24 +44,20 @@ fn the_same<V>(element: V)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct Foo {
-    one: String,
-    two: String
+struct Foo<T:Debug> {
+    one: u32,
+    two: T,
+    id: usize
 }
+
 
 #[test]
 fn test_bincode_crc_serialize() {
-
-    let f = Foo {one: "a".to_string(), two: "b".to_string() };
     use std::io::Cursor;
+    let f = Foo {one:1000, two: "sfdsjdnf".to_string(), id: 111};
     let mut v = serialize_crc::<_,_,byteorder::LittleEndian>(&f, Infinite).unwrap();
-    println!("{:?}",v );
-
-    let a: Result<Foo> = deserialize_crc_from::<_, _, _>(&mut Cursor::new(v), Infinite);
-
-    println!("Deserialize {:?}", a, );
-
-    // let d = Deserializer::new(&mut some_reader, SizeLimit::new());
+    let foo_return: Result<Foo<String>> = deserialize_crc_from::<_, _, _, byteorder::LittleEndian>(&mut Cursor::new(v), Infinite);
+    println!("{:?}", foo_return);
 }
 
 #[test]

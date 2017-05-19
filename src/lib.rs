@@ -88,7 +88,7 @@ pub fn deserialize_from<R: ?Sized, T, S>(reader: &mut R, size_limit: S) -> inter
 
 /// CRC DE
 pub fn deserialize_crc_from<R: ?Sized, T, S>(reader: &mut R, size_limit: S) -> internal::Result<T>
-    where R: Read, T: serde_crate::de::DeserializeOwned, S: SizeLimit
+    where R: Read, T: serde_crate::de::DeserializeOwned + serde_crate::Serialize, S: SizeLimit
 {
     internal::deserialize_crc_from::<_, _, _, byteorder::LittleEndian>(reader, size_limit)
 }

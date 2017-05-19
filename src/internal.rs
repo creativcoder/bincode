@@ -164,7 +164,8 @@ pub fn serialize<T: ?Sized, S, E>(value: &T, size_limit: S) -> Result<Vec<u8>>
     Ok(writer)
 }
 
-/// foo
+/// Serializes the given T along with prepending the crc of the data for data integrity checks while
+/// deserializing.
 pub fn serialize_into_crc<W: ?Sized, T: ?Sized, S, E>(writer: &mut W, value: &T, size_limit: S) -> Result<()>
     where W: Write, T: serde::Serialize, S: SizeLimit, E: ByteOrder
 {
@@ -175,6 +176,7 @@ pub fn serialize_into_crc<W: ?Sized, T: ?Sized, S, E>(writer: &mut W, value: &T,
     let mut serializer = Serializer::<_, E>::new(writer);
     serde::Serialize::serialize(value, &mut serializer)
 }
+
 
 /// foo
 pub fn serialize_crc<T: ?Sized, S, E>(value: &T, size_limit: S) -> Result<Vec<u8>>
@@ -192,11 +194,14 @@ where T: serde::Serialize, S: SizeLimit, E: ByteOrder {
 
     let mut payload_vec = vec![];
     try!(serialize_into::<_, _, _, E>(&mut payload_vec, value, super::Infinite));
+    let payload_len: u32 = payload_vec.len() as u32;
+    let mut payload_len_vec = vec![];
+    try!(serialize_into::<_, _, _, E>(&mut payload_len_vec, &payload_len, super::Infinite));
     let mut crc_vec = vec![];
     let crc = CRC32(crc32::checksum_ieee(&payload_vec));
     println!("During serial CRC {:?}", crc);
     try!(serialize_into::<_, _, _, E>(&mut crc_vec, &crc, super::Infinite));
-    let concatenated: Vec<u8> = [&crc_vec[..], &payload_vec[..]].concat();
+    let concatenated: Vec<u8> = [&crc_vec[..], &payload_len_vec[..], &payload_vec[..]].concat();
     Ok(concatenated)
 }
 
@@ -274,15 +279,22 @@ pub fn deserialize_from<R: ?Sized, T, S, E>(reader: &mut R, size_limit: S) -> Re
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::Cursor;
-use std::slice::SliceExt;
 
-/// de crc
+/// Deserializes the given reader to a type T along with checking for CRC. If the obtained buffer
+/// does not match with the prepended crc, this errors out with a crc mismatch error
 pub fn deserialize_crc_from<R: ?Sized, T, S, E>(reader: &mut R, size_limit: S) -> Result<T>
     where R: Read, T: serde::de::DeserializeOwned, S: SizeLimit, E: ByteOrder
 {
     let crc_byte = reader.read_u32::<E>().unwrap();
-    println!("CRC WHILE DESER {:?}", crc_byte);
-    let reader = ::de::read::IoReadReader::new(reader);
+    let payload_len = reader.read_u32::<E>().unwrap();
+    let mut data_holder = vec![0u8;payload_len as usize];
+    reader.read_exact(&mut data_holder);
+    if !crc32::checksum_ieee(&data_holder[..]) == crc_byte {
+        return Err(Box::new(ErrorKind::CRCMismatch))
+    } else {
+        println!("CRC MATCHES");
+    }
+    let reader = ::de::read::IoReadReader::new(Cursor::new(data_holder));
     let mut deserializer = Deserializer::<_, S, E>::new(reader, size_limit);
     serde::Deserialize::deserialize(&mut deserializer)
 }
